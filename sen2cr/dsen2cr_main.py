@@ -13,7 +13,7 @@ from keras.optimizers import Nadam
 from keras.utils import multi_gpu_model
 from tools.dataIO import get_train_val_test_filelists
 
-K.set_image_data_format('channels_first')
+K.set_image_data_format("channels_first")
 
 
 def run_dsen2cr(predict_file=None, resume_file=None):
@@ -23,7 +23,7 @@ def run_dsen2cr(predict_file=None, resume_file=None):
     # TODO implement external hyperparam config file
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Setup model %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    model_name = 'DSen2-CR_001'  # model name for training
+    model_name = "DSen2-CR_001"  # model name for training
 
     # model parameters
     num_layers = 16  # B value in paper
@@ -41,9 +41,44 @@ def run_dsen2cr(predict_file=None, resume_file=None):
     # input data preprocessing parameters
     scale = 2000
     max_val_sar = 2
-    clip_min = [[-25.0, -32.5], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
-    clip_max = [[0, 0], [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000],
-                [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000]]
+    clip_min = [
+        [-25.0, -32.5],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ]
+    clip_max = [
+        [0, 0],
+        [
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+        ],
+        [
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+        ],
+    ]
 
     shuffle_train = True  # shuffle images at training time
     data_augmentation = True  # flip and rotate images randomly for data augmentation
@@ -53,10 +88,10 @@ def run_dsen2cr(predict_file=None, resume_file=None):
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Setup training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    dataset_list_filepath = '../Data/datasetfilelist.csv'
+    dataset_list_filepath = "../Data/datasetfilelist.csv"
 
-    base_out_path = '/path/to/output/model_runs/'
-    input_data_folder = '/path/to/dataset/parent/folder'
+    base_out_path = "/path/to/output/model_runs/"
+    input_data_folder = "/path/to/dataset/parent/folder"
 
     # training parameters
     initial_epoch = 0  # start at epoch number
@@ -66,22 +101,32 @@ def run_dsen2cr(predict_file=None, resume_file=None):
     # define metric to be optimized
     loss = img_met.carl_error
     # define metrics to monitor
-    metrics = [img_met.carl_error, img_met.cloud_mean_absolute_error,
-               img_met.cloud_mean_squared_error, img_met.cloud_mean_sam, img_met.cloud_mean_absolute_error_clear,
-               img_met.cloud_psnr,
-               img_met.cloud_root_mean_squared_error, img_met.cloud_bandwise_root_mean_squared_error,
-               img_met.cloud_mean_absolute_error_covered, img_met.cloud_ssim,
-               img_met.cloud_mean_sam_covered, img_met.cloud_mean_sam_clear]
+    metrics = [
+        img_met.carl_error,
+        img_met.cloud_mean_absolute_error,
+        img_met.cloud_mean_squared_error,
+        img_met.cloud_mean_sam,
+        img_met.cloud_mean_absolute_error_clear,
+        img_met.cloud_psnr,
+        img_met.cloud_root_mean_squared_error,
+        img_met.cloud_bandwise_root_mean_squared_error,
+        img_met.cloud_mean_absolute_error_covered,
+        img_met.cloud_ssim,
+        img_met.cloud_mean_sam_covered,
+        img_met.cloud_mean_sam_clear,
+    ]
 
     # define learning rate
     lr = 7e-5
 
     # initialize optimizer
-    optimizer = Nadam(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=1e-8, schedule_decay=0.004)
+    optimizer = Nadam(
+        lr=lr, beta_1=0.9, beta_2=0.999, epsilon=1e-8, schedule_decay=0.004
+    )
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Other setup parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    predict_data_type = 'val'  # possible options: 'val' or 'test'
+    predict_data_type = "val"  # possible options: 'val' or 'test'
 
     log_step_freq = 1  # frequency of logging
 
@@ -118,29 +163,35 @@ def run_dsen2cr(predict_file=None, resume_file=None):
 
     # single or no-gpu case
     if n_gpus <= 1:
-        model, shape_n = DSen2CR_model(input_shape,
-                                       batch_per_gpu=batch_per_gpu,
-                                       num_layers=num_layers,
-                                       feature_size=feature_size,
-                                       use_cloud_mask=use_cloud_mask,
-                                       include_sar_input=include_sar_input)
+        model, shape_n = DSen2CR_model(
+            input_shape,
+            batch_per_gpu=batch_per_gpu,
+            num_layers=num_layers,
+            feature_size=feature_size,
+            use_cloud_mask=use_cloud_mask,
+            include_sar_input=include_sar_input,
+        )
     else:
         # handle multiple gpus
-        with tf.device('/cpu:0'):
-            single_model, shape_n = DSen2CR_model(input_shape,
-                                                  batch_per_gpu=batch_per_gpu,
-                                                  num_layers=num_layers,
-                                                  feature_size=feature_size,
-                                                  use_cloud_mask=use_cloud_mask,
-                                                  include_sar_input=include_sar_input)
+        with tf.device("/cpu:0"):
+            single_model, shape_n = DSen2CR_model(
+                input_shape,
+                batch_per_gpu=batch_per_gpu,
+                num_layers=num_layers,
+                feature_size=feature_size,
+                use_cloud_mask=use_cloud_mask,
+                include_sar_input=include_sar_input,
+            )
 
         model = multi_gpu_model(single_model, gpus=n_gpus)
 
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
-    print('Model compiled successfully!')
+    print("Model compiled successfully!")
 
     print("Getting file lists")
-    train_filelist, val_filelist, test_filelist = get_train_val_test_filelists(dataset_list_filepath)
+    train_filelist, val_filelist, test_filelist = get_train_val_test_filelists(
+        dataset_list_filepath
+    )
 
     print("Number of train files found: ", len(train_filelist))
     print("Number of validation files found: ", len(val_filelist))
@@ -148,32 +199,80 @@ def run_dsen2cr(predict_file=None, resume_file=None):
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PREDICT %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if predict_file is not None:
-        if predict_data_type == 'val':
+        if predict_data_type == "val":
             predict_filelist = val_filelist
-        elif predict_data_type == 'test':
+        elif predict_data_type == "test":
             predict_filelist = test_filelist
         else:
-            raise ValueError('Prediction data type not recognized.')
+            raise ValueError("Prediction data type not recognized.")
 
-        predict_dsen2cr(predict_file, model, predict_data_type, base_out_path, input_data_folder, predict_filelist,
-                        batch_size, clip_min, clip_max, crop_size, input_shape, use_cloud_mask, cloud_threshold,
-                        max_val_sar, scale)
+        predict_dsen2cr(
+            predict_file,
+            model,
+            predict_data_type,
+            base_out_path,
+            input_data_folder,
+            predict_filelist,
+            batch_size,
+            clip_min,
+            clip_max,
+            crop_size,
+            input_shape,
+            use_cloud_mask,
+            cloud_threshold,
+            max_val_sar,
+            scale,
+        )
 
     else:
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TRAIN %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-        train_dsen2cr(model, model_name, base_out_path, resume_file, train_filelist, val_filelist, lr, log_step_freq,
-                      shuffle_train, data_augmentation, random_crop, batch_size, scale, clip_max, clip_min, max_val_sar,
-                      use_cloud_mask, cloud_threshold, crop_size, epochs_nr, initial_epoch, input_data_folder,
-                      input_shape, max_queue_size, use_multi_processing, workers)
+        train_dsen2cr(
+            model,
+            model_name,
+            base_out_path,
+            resume_file,
+            train_filelist,
+            val_filelist,
+            lr,
+            log_step_freq,
+            shuffle_train,
+            data_augmentation,
+            random_crop,
+            batch_size,
+            scale,
+            clip_max,
+            clip_min,
+            max_val_sar,
+            use_cloud_mask,
+            cloud_threshold,
+            crop_size,
+            epochs_nr,
+            initial_epoch,
+            input_data_folder,
+            input_shape,
+            max_queue_size,
+            use_multi_processing,
+            workers,
+        )
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% MAIN %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='DSen2-CR model code')
-    parser.add_argument('--predict', action='store', dest='predict_file', help='Predict from model checkpoint.')
-    parser.add_argument('--resume', action='store', dest='resume_file', help='Resume training from model checkpoint.')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DSen2-CR model code")
+    parser.add_argument(
+        "--predict",
+        action="store",
+        dest="predict_file",
+        help="Predict from model checkpoint.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store",
+        dest="resume_file",
+        help="Resume training from model checkpoint.",
+    )
     args = parser.parse_args()
 
     run_dsen2cr(args.predict_file, args.resume_file)
