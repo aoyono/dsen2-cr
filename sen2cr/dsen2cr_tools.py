@@ -248,6 +248,7 @@ def predict_dsen2cr(
 
             # predict output image
             predicted = model.predict_on_batch(data)
+            yield predicted
             # process predicted image
             process_predicted(
                 predicted,

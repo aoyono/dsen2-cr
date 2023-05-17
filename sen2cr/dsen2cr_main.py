@@ -206,7 +206,7 @@ def run_dsen2cr(predict_file=None, resume_file=None):
         else:
             raise ValueError("Prediction data type not recognized.")
 
-        predict_dsen2cr(
+        list(predict_dsen2cr(
             predict_file,
             model,
             predict_data_type,
@@ -222,7 +222,7 @@ def run_dsen2cr(predict_file=None, resume_file=None):
             cloud_threshold,
             max_val_sar,
             scale,
-        )
+        ))
 
     else:
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TRAIN %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
