@@ -1,7 +1,7 @@
-import keras.backend as K
 import tensorflow as tf
-from keras.layers import Conv2D, Concatenate, Activation, Lambda, Add
-from keras import Model, Input
+import tensorflow.keras.backend as K
+from tensorflow.keras import Model, Input
+from tensorflow.keras.layers import Conv2D, Concatenate, Activation, Lambda, Add
 
 K.set_image_data_format('channels_first')
 

@@ -2,13 +2,14 @@ import csv
 import os
 import os.path
 
-import keras
 import matplotlib
 import numpy as np
 import rasterio
 import scipy.signal as scisig
 from matplotlib import pyplot as plt
-from tools.feature_detectors import get_cloud_cloudshadow_mask
+from tensorflow import keras
+
+from sen2cr.tools.feature_detectors import get_cloud_cloudshadow_mask
 
 
 def make_dir(dir_path):

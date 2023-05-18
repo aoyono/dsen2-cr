@@ -7,11 +7,11 @@ setup(
     packages=find_packages(),
     install_requires=[
         'tensorflow',
-        'keras',
         'numpy',
         'scipy',
         'rasterio',
         'pydot',
         'h5py',
+        "matplotlib",
     ],
 )

@@ -3,15 +3,15 @@ from __future__ import division
 import argparse
 import random
 
-import keras.backend as K
 import numpy as np
 import tensorflow as tf
-import tools.image_metrics as img_met
-from dsen2cr_network import DSen2CR_model
-from dsen2cr_tools import train_dsen2cr, predict_dsen2cr
-from keras.optimizers import Nadam
-from keras.utils import multi_gpu_model
-from tools.dataIO import get_train_val_test_filelists
+import tensorflow.keras.backend as K
+from tensorflow.keras.optimizers import Nadam
+
+import sen2cr.tools.image_metrics as img_met
+from sen2cr.dsen2cr_network import DSen2CR_model
+from sen2cr.dsen2cr_tools import train_dsen2cr, predict_dsen2cr
+from sen2cr.tools.dataIO import get_train_val_test_filelists
 
 K.set_image_data_format("channels_first")
 
@@ -173,6 +173,7 @@ def run_dsen2cr(predict_file=None, resume_file=None):
         )
     else:
         # handle multiple gpus
+
         with tf.device("/cpu:0"):
             single_model, shape_n = DSen2CR_model(
                 input_shape,

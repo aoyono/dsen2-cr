@@ -1,5 +1,7 @@
-import keras.backend as K
 import tensorflow as tf
+from tensorflow import keras
+
+K = keras.backend
 
 
 def cloud_mean_absolute_error(y_true, y_pred):
