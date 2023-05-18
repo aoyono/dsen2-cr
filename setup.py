@@ -6,7 +6,7 @@ setup(
     url='https://github.com/aoyono/dsen2-cr',
     packages=find_packages(),
     install_requires=[
-        'tensorflow-gpu',
+        'tensorflow',
         'keras',
         'numpy',
         'scipy',
