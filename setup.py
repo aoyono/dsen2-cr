@@ -13,5 +13,6 @@ setup(
         'pydot',
         'h5py',
         "matplotlib",
+        "click"
     ],
 )

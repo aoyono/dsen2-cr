@@ -2,7 +2,9 @@ from __future__ import division
 
 import argparse
 import random
+from pathlib import Path
 
+import click
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
@@ -15,6 +17,251 @@ from sen2cr.tools.dataIO import get_train_val_test_filelists
 
 K.set_image_data_format("channels_first")
 
+
+@click.command('remove-clouds')
+@click.option(
+    '--model',
+    required=True,
+    help="Path to the file containing the weights of the model to use for cloud removal",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    '--name',
+    help='Arbitrary name to give to the model',
+    type=click.STRING,
+    default=''
+)
+@click.option(
+    '--layers',
+    'num_layers',
+    help='Number of layers in the model whose weights are being used',
+    type=click.INT,
+    default=16,
+    show_default=True,
+)
+@click.option(
+    '--features',
+    'feature_size',
+    help='The number of individual features taken into account by the model',
+    type=click.INT,
+    default=256,
+    show_default=True,
+)
+@click.option(
+    '--gpu',
+    "n_gpus",
+    help="The number of GPUs available and to use for inference",
+    type=click.INT,
+    required=False,
+    default=0,
+    show_default=True,
+)
+@click.option(
+    '--batch-size',
+    'batch_size',
+    help='The size of one batch of data. Ignored if --gpu=0 (the default)',
+    type=click.INT,
+    default=16,
+    show_default=True,
+)
+@click.option(
+    "--crop-size",
+    help="The size of the patches on which the model will do the cloud removal before re-assembly",
+    type=click.INT,
+    default=256,
+    show_default=True,
+)
+@click.option(
+    "--input-data-folder",
+    help="The root folder containing the data",
+    show_default=True,
+    type=click.Path(exists=True, file_okay=False, resolve_path=True, path_type=Path),
+    default=Path('.'),
+)
+@click.option(
+    "--outputs-folder",
+    help="The root folder containing the outputs of the model",
+    type=click.Path(file_okay=False, resolve_path=True, path_type=Path),
+    show_default=True,
+    default=Path('.')
+)
+@click.option(
+    "--input-dataset-filelist",
+    help="The CSV file containing 4 values: type of file (one of 1=training, 2=validation and 3=inference)"
+         "the name of the directory containing the S1 data, the name of the directory containing cloud"
+         "free S2 data, the name of the directory containing cloudy S2 data and the name of the file to "
+         "find in each of these directories",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--exclude-sar-input",
+    help='Whether to *NOT* pass a SAR image as input to the model',
+    is_flag=True,
+    flag_value=True,
+)
+@click.option(
+    "--no-use-cloud-mask",
+    help='Whether to *NOT* use a cloud mask',
+    is_flag=True,
+    flag_value=True,
+)
+@click.option(
+    '--cloud-threshold',
+    help='The Threshold to use to detect clouds using the cloud mask. Ignored if --no-use-cloud-mask',
+    type=click.FLOAT,
+    default=0.2,
+    show_default=True,
+)
+def remove_clouds(
+        model, num_layers, feature_size, n_gpus, batch_size, crop_size, input_data_folder, outputs_folder, input_dataset_filelist, exclude_sar_input, no_use_cloud_mask, cloud_threshold,
+):
+    model_name = 'DSen2-CR_001'
+    use_multi_processing = True
+    max_queue_size = 2 * n_gpus
+    workers = 4 * n_gpus
+    batch_per_gpu = 0 if n_gpus == 0 else int(batch_size / n_gpus)
+
+    # Configure Tensorflow session
+    config = tf.ConfigProto()
+    # Don't pre-allocate memory; allocate as-needed
+    config.gpu_options.allow_growth = True
+
+    # Only allow a total % of the GPU memory to be allocated
+    # config.gpu_options.per_process_gpu_memory_fraction = 0.3
+
+    # Create a session with the above options specified.
+    K.tensorflow_backend.set_session(tf.Session(config=config))
+
+    # Set random seeds for repeatability
+    random_seed_general = 42
+    random.seed(random_seed_general)  # random package
+    np.random.seed(random_seed_general)  # numpy package
+    tf.set_random_seed(random_seed_general)  # tensorflow
+    #             (s2_shape,                 ,  s1_shape)
+    #             ((n_channels, cs, cs)      , (n_channels, cs, cs))
+    input_shape = ((13, crop_size, crop_size), (2, crop_size, crop_size))
+
+    model_arch, shape_n = get_model(
+        input_shape,
+        n_gpus,
+        crop_size,
+        batch_size_per_gpu,
+        not exclude_sar_input,
+        num_layers,
+        feature_size,
+        not no_use_cloud_mask,
+    )
+
+    optimizer = Nadam(
+        lr=7e-5,
+        beta_1=0.9,
+        beta_2=0.999,
+        epsilon=1e-8,
+        schedule_decay=0.004,
+    )
+    loss = image_metrics.carl_error
+    metrics = [
+        image_metrics.carl_error,
+        image_metrics.cloud_mean_absolute_error,
+        image_metrics.cloud_mean_squared_error,
+        image_metrics.cloud_mean_sam,
+        image_metrics.cloud_mean_absolute_error_clear,
+        image_metrics.cloud_psnr,
+        image_metrics.cloud_root_mean_squared_error,
+        image_metrics.cloud_bandwise_root_mean_squared_error,
+        image_metrics.cloud_mean_absolute_error_covered,
+        image_metrics.cloud_ssim,
+        image_metrics.cloud_mean_sam_covered,
+        image_metrics.cloud_mean_sam_clear,
+    ]
+
+    model_arch.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+    _, _, input_data_path_defs = get_train_val_test_filelists(filelist_path)
+
+    # input data preprocessing parameters
+    scale = 2000
+    max_val_sar = 2
+    clip_min = [
+        [-25.0, -32.5],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ]
+    clip_max = [
+        [0, 0],
+        [
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+        ],
+        [
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+            10000,
+        ],
+    ]
+
+    list(predict_dsen2cr(
+        model,
+        model_arch,
+        "test",
+        outputs_folder,
+        input_data_folder,
+        input_dataset_filelist,
+        batch_size,
+        clip_min,
+        clip_max,
+        crop_size,
+        input_shape,
+        use_cloud_mask,
+        cloud_threshold,
+        max_val_sar,
+        scale,
+    ))
+
+
+def get_model(input_shape, n_gpus, crop_size, batch_per_gpu, include_sar_input, num_layers=16, feature_size=256, use_cloud_mask=True):
+    if n_gpus <= 1:
+        return DSen2CR_model(
+            input_shape,
+            batch_per_gpu=batch_per_gpu,
+            num_layers=num_layers,
+            feature_size=feature_size,
+            use_cloud_mask=use_cloud_mask,
+            include_sar_input=include_sar_input,
+        )
+    with tf.device("/cpu:0"):
+        single_model, shape_n = DSen2CR_model(
+            input_shape,
+            batch_per_gpu=batch_per_gpu,
+            num_layers=num_layers,
+            feature_size=feature_size,
+            use_cloud_mask=use_cloud_mask,
+            include_sar_input=include_sar_input,
+        )
+    model = multi_gpu_model(single_model, gpus=n_gpus)
+    return model, shape_n
 
 def run_dsen2cr(predict_file=None, resume_file=None):
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -261,19 +508,4 @@ def run_dsen2cr(predict_file=None, resume_file=None):
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% MAIN %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DSen2-CR model code")
-    parser.add_argument(
-        "--predict",
-        action="store",
-        dest="predict_file",
-        help="Predict from model checkpoint.",
-    )
-    parser.add_argument(
-        "--resume",
-        action="store",
-        dest="resume_file",
-        help="Resume training from model checkpoint.",
-    )
-    args = parser.parse_args()
-
-    run_dsen2cr(args.predict_file, args.resume_file)
+    remove_clouds()

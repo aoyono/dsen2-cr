@@ -10,6 +10,128 @@ from matplotlib import pyplot as plt
 from tensorflow import keras
 
 from sen2cr.tools.feature_detectors import get_cloud_cloudshadow_mask
+from pathlib import Path
+
+
+def get_scene_data(scene_name, base_dir='data', cloudy_dir='cloudy_s2', cloudless_dir='cloudless_s2', s1_dir='s1'):
+    """Get the data for a given scene"""
+    base_dir = Path(base_dir)
+    data = {}
+    for data_type in (cloudy_dir, cloudless_dir, s1_dir):
+        path = base_dir / data_type / scene_name
+        if path.exists():
+            with rasterio.open(path, 'r') as ds:
+                img = ds.read()
+                # Replace NaNs with the mean of the image
+                img[np.isnan(img)] = np.nanmean(img)
+                data[data_type] = img
+    return data
+
+
+def preprocess_scene_data(scene_data, sar_clip_min=None, sar_clip_max=None, sar_max_value=2., s2_clip_min=None, s2_clip_max=None, s2_scale=2000., channel_last=False):
+    preproc_scene_data = {}
+    for data_type, img in scene_data.items():
+        if data_type == 's1':
+            preproc_scene_data[data_type] = preprocess_s1_data(img.astype('float32'), sar_clip_min, sar_clip_max, sar_max_value, channel_last)
+        elif data_type in ('cloudy_s2', 'cloudless_s2'):
+            preproc_scene_data[data_type] = preprocess_s2_data(img.astype('float32'), s2_clip_min, s2_clip_max, s2_scale, channel_last)
+    return preproc_scene_data
+
+
+def get_scene_data_batch(scene_names, base_dir='data', cloudy_dir='cloudy_s2', cloudless_dir='cloudless_s2', s1_dir='s1', sar_clip_min=None, sar_clip_max=None, sar_max_value=2., s2_clip_min=None, s2_clip_max=None, s2_scale=2000.,):
+    scene_img_data = [get_scene_data(scene_name, base_dir, cloudy_dir, cloudless_dir, s1_dir) for scene_name in scene_names]
+    scene_data = [
+        preprocess_scene_data(
+            img_data, sar_clip_min, sar_clip_max, sar_max_value, s2_clip_min, s2_clip_max, s2_scale,
+        )
+        for img_data in scene_img_data
+    ]
+    batch_length = len(scene_names)
+    s2_data_dims = scene_data[0]['cloudy_s2'].shape
+    s1_data_dims = scene_data[0]['s1'].shape
+    batch = {
+        cloudy_dir: np.empty_like((batch_length, *s2_data_dims)).astype('float32'),
+        cloudless_dir: np.empty_like((batch_length, *s2_data_dims)).astype('float32'),
+        s1_dir: np.empty_like((batch_length, *s1_data_dims)).astype('float32'),
+    }
+    for i, data in enumerate(scene_data):
+        for data_type, img in data.items():
+            batch[data_type][i] = img
+    return batch
+
+
+def save_model_output_batch(model_output, scene_names, output_dir='output', input_base_dir='data', postprocess=True, s2_scale=2000., channel_last=False):
+    for i, scene_name in enumerate(scene_names):
+        if postprocess:
+            data = postprocess_model_output(model_output[i], s2_scale=s2_scale, channel_last=channel_last)
+        save_model_output(data, scene_name, output_dir, input_base_dir)
+
+
+def extract_rgb(data, channel_last=False, rgb_bands=(3, 2, 1)):
+    original_dtype = data.dtype
+    if original_dtype in ('uint8', 'uint16'):
+        data = data.astype('float32')
+    if channel_last:
+        data = np.transpose(data, (2, 0, 1))[rgb_bands, :, :]
+    else:
+        data = data[:, :, rgb_bands]
+    data -= np.nanmin(data)
+    if np.nanmax(data) == 0:
+        data = 255. * np.ones_like(data)
+    else:
+        data *= 1. / np.nanmax(data)
+    data[np.isnan(data)] = np.nanmean(data)
+    return data.astype(original_dtype)
+
+
+
+def postprocess_model_output(model_output, s2_scale=2000., channel_last=False, tci=False, rgb_bands=(3, 2, 1)):
+    model_output *= s2_scale
+    if tci:
+        return extract_rgb(model_output, channel_last=channel_last, rgb_bands=rgb_bands)
+    if channel_last:
+        model_output = np.transpose(model_output, (2, 0, 1))
+    return model_output
+
+
+def save_model_output(model_output, scene_name, output_dir='output', input_base_dir='data', post_process=False, s2_scale=2000., channel_last=False, tci=False, rgb_bands=(3, 2, 1)):
+    output_dir = Path(output_dir)
+    input_dir = Path(input_base_dir) / 'cloudy_s2'
+    output_dir.mkdir(exist_ok=True, parents=True)
+    output_path = output_dir / scene_name
+    input_profile = rasterio.open(input_dir / scene_name).meta
+    input_profile.update(dtype='float32')
+    if post_process:
+        model_output = postprocess_model_output(model_output, s2_scale=s2_scale, channel_last=channel_last, tci=tci, rgb_bands=rgb_bands)
+        if tci:
+            input_profile.update(count=3, dtype='uint8')
+    with rasterio.open(output_path, 'w', **input_profile) as ds:
+        ds.write(model_output)
+
+
+def preprocess_s1_data(s1_data, clip_min=None, clip_max=None, sar_max_value=2., channel_last=False):
+    if clip_min is None:
+        clip_min = np.array([[[-25.0]], [[-32.5]]])
+    if clip_max is None:
+        clip_max = np.array([[[0.]]] * 2)
+    data = np.clip(s1_data, clip_min, clip_max)
+    data -= clip_min
+    data *= sar_max_value / (clip_max - clip_min)
+    if s1_data.shape[0] == 2 and channel_last:
+        data = np.transpose(data, (1, 2, 0))
+    return data
+
+
+def preprocess_s2_data(s2_data, clip_min=None, clip_max=None, s2_scale=2000., channel_last=False):
+    if clip_min is None:
+        clip_min = np.array([[[0.]]] * 13)
+    if clip_max is None:
+        clip_max = np.array([[[10000.]]] * 13)
+    data = np.clip(s2_data, clip_min, clip_max)
+    data /= s2_scale
+    if s2_data.shape[0] == 13 and channel_last:
+        data = np.transpose(data, (1, 2, 0))
+    return data
 
 
 def make_dir(dir_path):
@@ -23,14 +145,13 @@ def make_dir(dir_path):
 
 def get_train_val_test_filelists(listpath):
     with open(listpath) as f:
-        reader = csv.reader(f, delimiter='\t')
-        filelist = list(reader)
+        filelist = csv.reader(f)
 
     train_filelist = []
     val_filelist = []
     test_filelist = []
     for f in filelist:
-        line_entries = f[0].split(sep=", ")
+        line_entries = f[0].split(",")
         if line_entries[0] == '1':
             train_filelist.append(line_entries)
         if line_entries[0] == '2':
