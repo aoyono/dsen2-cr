@@ -26,10 +26,11 @@ K.set_image_data_format("channels_first")
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
 @click.option(
-    '--name',
+    '--model-name',
     help='Arbitrary name to give to the model',
     type=click.STRING,
-    default=''
+    default='DSen2-CR_001',
+    show_default=True,
 )
 @click.option(
     '--layers',
@@ -68,7 +69,7 @@ K.set_image_data_format("channels_first")
     "--crop-size",
     help="The size of the patches on which the model will do the cloud removal before re-assembly",
     type=click.INT,
-    default=256,
+    default=128,
     show_default=True,
 )
 @click.option(
@@ -114,9 +115,20 @@ K.set_image_data_format("channels_first")
     show_default=True,
 )
 def remove_clouds(
-        model, num_layers, feature_size, n_gpus, batch_size, crop_size, input_data_folder, outputs_folder, input_dataset_filelist, exclude_sar_input, no_use_cloud_mask, cloud_threshold,
+        model,
+        model_name,
+        num_layers,
+        feature_size,
+        n_gpus,
+        batch_size,
+        crop_size,
+        input_data_folder,
+        outputs_folder,
+        input_dataset_filelist,
+        exclude_sar_input,
+        no_use_cloud_mask,
+        cloud_threshold,
 ):
-    model_name = 'DSen2-CR_001'
     use_multi_processing = True
     max_queue_size = 2 * n_gpus
     workers = 4 * n_gpus
