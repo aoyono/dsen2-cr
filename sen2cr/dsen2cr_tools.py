@@ -204,6 +204,7 @@ def predict_dsen2cr(
     cloud_threshold,
     max_val_sar,
     scale,
+    include_target=False,
 ):
     print("Predicting using file: {}".format(predict_file))
     print("Using this model: {}".format(model_name))
@@ -220,7 +221,7 @@ def predict_dsen2cr(
         "batch_size": 1,
         "shuffle": False,
         "scale": scale,
-        "include_target": True,
+        "include_target": include_target,
         "data_augmentation": False,
         "random_crop": False,
         "crop_size": crop_size,
