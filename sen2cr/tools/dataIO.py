@@ -7,7 +7,7 @@ import numpy as np
 import rasterio
 import scipy.signal as scisig
 from matplotlib import pyplot as plt
-from tensorflow import keras
+from tensorflow.compat.v1 import keras
 
 from sen2cr.tools.feature_detectors import get_cloud_cloudshadow_mask
 from pathlib import Path
@@ -145,21 +145,20 @@ def make_dir(dir_path):
 
 def get_train_val_test_filelists(listpath):
     with open(listpath) as f:
-        filelist = csv.reader(f)
+        filelist = csv.reader(f, delimiter='\t')
 
-    train_filelist = []
-    val_filelist = []
-    test_filelist = []
-    for f in filelist:
-        line_entries = f[0].split(",")
-        if line_entries[0] == '1':
-            train_filelist.append(line_entries)
-        if line_entries[0] == '2':
-            val_filelist.append(line_entries)
-        if line_entries[0] == '3':
-            test_filelist.append(line_entries)
+        train_filelist = []
+        val_filelist = []
+        test_filelist = []
+        for line_entries in filelist:
+            if line_entries[0] == '1':
+                train_filelist.append(line_entries)
+            if line_entries[0] == '2':
+                val_filelist.append(line_entries)
+            if line_entries[0] == '3':
+                test_filelist.append(line_entries)
 
-    return train_filelist, val_filelist, test_filelist
+        return train_filelist, val_filelist, test_filelist
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Output%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -6,15 +6,17 @@ from pathlib import Path
 
 import click
 import numpy as np
-import tensorflow as tf
-import tensorflow.keras.backend as K
-from tensorflow.keras.optimizers import Nadam
+import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1.keras.backend as K
+from tensorflow.compat.v1.keras.optimizers import Nadam
 
 import sen2cr.tools.image_metrics as img_met
 from sen2cr.dsen2cr_network import DSen2CR_model
 from sen2cr.dsen2cr_tools import train_dsen2cr, predict_dsen2cr
 from sen2cr.tools.dataIO import get_train_val_test_filelists
 
+
+tf.disable_v2_behavior()
 K.set_image_data_format("channels_first")
 
 
@@ -132,7 +134,7 @@ def remove_clouds(
     use_multi_processing = True
     max_queue_size = 2 * n_gpus
     workers = 4 * n_gpus
-    batch_per_gpu = 0 if n_gpus == 0 else int(batch_size / n_gpus)
+    batch_size_per_gpu = 0 if n_gpus == 0 else int(batch_size / n_gpus)
 
     # Configure Tensorflow session
     config = tf.ConfigProto()
@@ -143,7 +145,7 @@ def remove_clouds(
     # config.gpu_options.per_process_gpu_memory_fraction = 0.3
 
     # Create a session with the above options specified.
-    K.tensorflow_backend.set_session(tf.Session(config=config))
+    K.set_session(tf.Session(config=config))
 
     # Set random seeds for repeatability
     random_seed_general = 42
@@ -154,15 +156,17 @@ def remove_clouds(
     #             ((n_channels, cs, cs)      , (n_channels, cs, cs))
     input_shape = ((13, crop_size, crop_size), (2, crop_size, crop_size))
 
+    include_sar_input = not exclude_sar_input
+    use_cloud_mask = not no_use_cloud_mask
     model_arch, shape_n = get_model(
         input_shape,
         n_gpus,
         crop_size,
         batch_size_per_gpu,
-        not exclude_sar_input,
+        include_sar_input,
         num_layers,
         feature_size,
-        not no_use_cloud_mask,
+        use_cloud_mask,
     )
 
     optimizer = Nadam(
@@ -172,25 +176,25 @@ def remove_clouds(
         epsilon=1e-8,
         schedule_decay=0.004,
     )
-    loss = image_metrics.carl_error
+    loss = img_met.carl_error
     metrics = [
-        image_metrics.carl_error,
-        image_metrics.cloud_mean_absolute_error,
-        image_metrics.cloud_mean_squared_error,
-        image_metrics.cloud_mean_sam,
-        image_metrics.cloud_mean_absolute_error_clear,
-        image_metrics.cloud_psnr,
-        image_metrics.cloud_root_mean_squared_error,
-        image_metrics.cloud_bandwise_root_mean_squared_error,
-        image_metrics.cloud_mean_absolute_error_covered,
-        image_metrics.cloud_ssim,
-        image_metrics.cloud_mean_sam_covered,
-        image_metrics.cloud_mean_sam_clear,
+        img_met.carl_error,
+        img_met.cloud_mean_absolute_error,
+        img_met.cloud_mean_squared_error,
+        img_met.cloud_mean_sam,
+        img_met.cloud_mean_absolute_error_clear,
+        img_met.cloud_psnr,
+        img_met.cloud_root_mean_squared_error,
+        img_met.cloud_bandwise_root_mean_squared_error,
+        img_met.cloud_mean_absolute_error_covered,
+        img_met.cloud_ssim,
+        img_met.cloud_mean_sam_covered,
+        img_met.cloud_mean_sam_clear,
     ]
 
     model_arch.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-    _, _, input_data_path_defs = get_train_val_test_filelists(filelist_path)
+    _, _, input_data_path_defs = get_train_val_test_filelists(input_dataset_filelist)
 
     # input data preprocessing parameters
     scale = 2000
@@ -240,7 +244,7 @@ def remove_clouds(
         "test",
         outputs_folder,
         input_data_folder,
-        input_dataset_filelist,
+        input_data_path_defs,
         batch_size,
         clip_min,
         clip_max,

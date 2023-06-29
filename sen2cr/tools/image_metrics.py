@@ -1,5 +1,5 @@
-import tensorflow as tf
-from tensorflow import keras
+import tensorflow.compat.v1 as tf
+from tensorflow.compat.v1 import keras
 
 K = keras.backend
 
