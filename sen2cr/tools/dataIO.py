@@ -443,7 +443,7 @@ class DataGenerator(keras.utils.Sequence):
                 return ([input_opt_batch, input_sar_batch], [output_opt_batch])
         elif not self.include_target:
             # for prediction step where target is predicted
-            return ([input_opt_batch, input_sar_batch])
+            return ([input_opt_batch, input_sar_batch], None)
 
     def get_image_data(self, paramx, paramy, path):
         # with block not working with window kw
