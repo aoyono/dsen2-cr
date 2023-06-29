@@ -15,4 +15,9 @@ setup(
         "matplotlib",
         "click"
     ],
+    entry_points={
+        "console_scripts": [
+            "sen2cr-rm-clouds = sen2cr.dsen2cr_main:remove_clouds",
+        ],
+    },
 )
