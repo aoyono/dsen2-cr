@@ -204,7 +204,7 @@ def predict_dsen2cr(
     cloud_threshold,
     max_val_sar,
     scale,
-    include_target=False,
+    test_mode=False,
 ):
     print("Predicting using file: {}".format(predict_file))
     print("Using this model: {}".format(model_name))
@@ -221,7 +221,7 @@ def predict_dsen2cr(
         "batch_size": 1,
         "shuffle": False,
         "scale": scale,
-        "include_target": include_target,
+        "include_target": test_mode,
         "data_augmentation": False,
         "random_crop": False,
         "crop_size": crop_size,
@@ -234,31 +234,39 @@ def predict_dsen2cr(
     }
     predict_generator = DataGenerator(predict_filelist, **params)
 
-    eval_csv_name = out_path_predict + "eval.csv"
-    print("Storing evaluation metrics at ", eval_csv_name)
+    if test_mode:
+        eval_csv_name = out_path_predict + "eval.csv"
+        print("Storing evaluation metrics at ", eval_csv_name)
+        with open(eval_csv_name, "a") as eval_csv_fh:
+            eval_writer = csv.writer(eval_csv_fh, dialect="excel")
+            eval_writer.writerow(model.metrics_names)
 
-    with open(eval_csv_name, "a") as eval_csv_fh:
-        eval_writer = csv.writer(eval_csv_fh, dialect="excel")
-        eval_writer.writerow(model.metrics_names)
+            for i, (data, y) in enumerate(predict_generator):
+                print("Processing file number ", i)
+                # get evaluation metrics
+                eval_results = model.test_on_batch(data, y)
+                # write evaluation metrics
+                eval_writer.writerow(eval_results)
 
-        for i, (data, y) in enumerate(predict_generator):
-            print("Processing file number ", i)
-            # get evaluation metrics
-            eval_results = model.test_on_batch(data, y)
-            # write evaluation metrics
-            eval_writer.writerow(eval_results)
-
-            # predict output image
-            predicted = model.predict_on_batch(data)
-            yield predicted
-            # process predicted image
-            process_predicted(
-                predicted,
-                predict_filelist[i * batch_size : i * batch_size + batch_size],
-                predicted_images_path,
-                scale,
-                cloud_threshold,
-                input_data_folder,
-            )
-
+                yield from prediction(batch_size, cloud_threshold, data, i, input_data_folder, model, predict_filelist,
+                                      predicted_images_path, scale)
+    else:
+        yield from prediction(batch_size, cloud_threshold, data, i, input_data_folder, model, predict_filelist,
+                              predicted_images_path, scale)
     print("Prediction finished with success!")
+
+
+def prediction(batch_size, cloud_threshold, data, i, input_data_folder, model, predict_filelist, predicted_images_path,
+               scale):
+    # predict output image
+    predicted = model.predict_on_batch(data)
+    yield predicted
+    # process predicted image
+    process_predicted(
+        predicted,
+        predict_filelist[i * batch_size: i * batch_size + batch_size],
+        predicted_images_path,
+        scale,
+        cloud_threshold,
+        input_data_folder,
+    )
