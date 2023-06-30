@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow.compat.v1 as tf
 import tensorflow.compat.v1.keras.backend as K
 from tensorflow.compat.v1.keras.optimizers import Nadam
+from keras.utils.multi_gpu_utils import multi_gpu_model
 
 import sen2cr.tools.image_metrics as img_met
 from sen2cr.dsen2cr_network import DSen2CR_model
