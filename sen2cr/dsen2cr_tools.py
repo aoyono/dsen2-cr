@@ -251,8 +251,10 @@ def predict_dsen2cr(
                 yield from prediction(batch_size, cloud_threshold, data, i, input_data_folder, model, predict_filelist,
                                       predicted_images_path, scale)
     else:
-        yield from prediction(batch_size, cloud_threshold, data, i, input_data_folder, model, predict_filelist,
-                              predicted_images_path, scale)
+        for i, (data, _) in enumerate(predict_generator):
+            print("Processing file number ", i)
+            yield from prediction(batch_size, cloud_threshold, data, i, input_data_folder, model, predict_filelist,
+                                  predicted_images_path, scale)
     print("Prediction finished with success!")
 
 
