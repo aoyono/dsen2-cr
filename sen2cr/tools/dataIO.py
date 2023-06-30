@@ -284,7 +284,7 @@ def save_single_cloudmap(image, out_path, name):
     norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
     plt.figure()
-    plt.imshow(image, cmap=cmap, norm=norm, vmin=-1, vmax=1)
+    plt.imshow(image, cmap=cmap, norm=norm)
 
     cb = plt.colorbar(aspect=40, pad=0.01)
     cb.ax.yaxis.set_tick_params(pad=0.9, length=2)
