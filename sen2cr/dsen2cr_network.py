@@ -1,8 +1,9 @@
-import tensorflow as tf
-import tensorflow.keras.backend as K
-from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import Conv2D, Concatenate, Activation, Lambda, Add
+import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1.keras.backend as K
+from tensorflow.compat.v1.keras import Model, Input
+from tensorflow.compat.v1.keras.layers import Conv2D, Concatenate, Activation, Lambda, Add, Layer
 
+tf.disable_v2_behavior()
 K.set_image_data_format('channels_first')
 
 
@@ -51,19 +52,22 @@ def DSen2CR_model(input_shape,
     x = Add()([x, input_opt])
 
     if use_cloud_mask:
-        # the hacky trick with global variables and with lambda functions is needed to avoid errors when
-        # pickle saving the model. Tensors are not pickable.
-        # This way, the Lambda function has no special arguments and is "encapsulated"
+        class AddCloudMaskLayer(Layer):
+            def __init__(self, optical_input_layer_shape, **kwargs):
+                super().__init__(**kwargs)
+                self.shape = optical_input_layer_shape
 
-        shape_n = tf.shape(input_opt)
-
-        def concatenate_array(x):
-            global shape_n
-            return K.concatenate([x, K.zeros(shape=(batch_per_gpu, 1, shape_n[2], shape_n[3]))], axis=1)
+            def call(self, inputs):
+                return K.concatenate([
+                    inputs,
+                    K.zeros(
+                        shape=(int(batch_per_gpu), 1, self.shape[2], self.shape[3])
+                    )
+                ], axis=1)
 
         x = Concatenate(axis=1)([x, input_opt])
 
-        x = Lambda(concatenate_array)(x)
+        x = AddCloudMaskLayer(tf.shape(input_opt))(x)
 
     model = Model(inputs=[input_opt, input_sar], outputs=x)
 
