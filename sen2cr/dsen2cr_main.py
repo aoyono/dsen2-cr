@@ -159,7 +159,7 @@ def remove_clouds(
 
     include_sar_input = not exclude_sar_input
     use_cloud_mask = not no_use_cloud_mask
-    model_arch, shape_n = get_model(
+    model_arch = get_model(
         input_shape,
         n_gpus,
         crop_size,
@@ -269,7 +269,7 @@ def get_model(input_shape, n_gpus, crop_size, batch_per_gpu, include_sar_input, 
             include_sar_input=include_sar_input,
         )
     with tf.device("/cpu:0"):
-        single_model, shape_n = DSen2CR_model(
+        single_model = DSen2CR_model(
             input_shape,
             batch_per_gpu=batch_per_gpu,
             num_layers=num_layers,
@@ -278,7 +278,7 @@ def get_model(input_shape, n_gpus, crop_size, batch_per_gpu, include_sar_input, 
             include_sar_input=include_sar_input,
         )
     model = multi_gpu_model(single_model, gpus=n_gpus)
-    return model, shape_n
+    return model
 
 def run_dsen2cr(predict_file=None, resume_file=None):
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -385,7 +385,7 @@ def run_dsen2cr(predict_file=None, resume_file=None):
 
     # initialize optimizer
     optimizer = Nadam(
-        lr=lr, beta_1=0.9, beta_2=0.999, epsilon=1e-8, schedule_decay=0.004
+        learning_rate=lr, beta_1=0.9, beta_2=0.999, epsilon=1e-8, schedule_decay=0.004
     )
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Other setup parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -427,7 +427,7 @@ def run_dsen2cr(predict_file=None, resume_file=None):
 
     # single or no-gpu case
     if n_gpus <= 1:
-        model, shape_n = DSen2CR_model(
+        model = DSen2CR_model(
             input_shape,
             batch_per_gpu=batch_per_gpu,
             num_layers=num_layers,
@@ -439,7 +439,7 @@ def run_dsen2cr(predict_file=None, resume_file=None):
         # handle multiple gpus
 
         with tf.device("/cpu:0"):
-            single_model, shape_n = DSen2CR_model(
+            single_model = DSen2CR_model(
                 input_shape,
                 batch_per_gpu=batch_per_gpu,
                 num_layers=num_layers,

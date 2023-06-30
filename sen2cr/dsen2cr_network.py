@@ -25,9 +25,6 @@ def DSen2CR_model(input_shape,
                   use_cloud_mask=True,
                   include_sar_input=True):
     """Definition of network structure. """
-
-    global shape_n
-
     # define dimensions
     input_opt = Input(shape=input_shape[0])
     input_sar = Input(shape=input_shape[1])
@@ -71,4 +68,4 @@ def DSen2CR_model(input_shape,
 
     model = Model(inputs=[input_opt, input_sar], outputs=x)
 
-    return model, shape_n
+    return model
